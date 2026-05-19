@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [0.2.1] - 2026-05-19
+
+### Fixed
+
+- Fixed broken GIF images on the marketplace README page (were pointing to a deleted `integration` branch, now pinned to a stable commit SHA)
+
+---
+
 ## [0.2.0] - 2026-05-19
 
 ### What's New
@@ -257,7 +265,8 @@ This release includes several under-the-hood improvements that make the extensio
 
 ---
 
-[Unreleased]: https://github.com/concretios/markdown-for-humans/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/concretios/markdown-for-humans/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/concretios/markdown-for-humans/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/concretios/markdown-for-humans/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/concretios/markdown-for-humans/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/concretios/markdown-for-humans/compare/v0.1.5...v0.1.6
