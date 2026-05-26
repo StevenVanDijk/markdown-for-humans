@@ -56,7 +56,7 @@
 
 **Entry points:**
 - Settings UI: `Markdown for Humans > Display: Editor Theme`.
-- Toolbar: a `color-mode` (half-filled circle) button near the gear/settings button.
+- Toolbar: a `color-mode` (half-filled circle) button placed at the end of the toolbar, immediately to the right of the gear/settings button.
 
 **User flows:**
 
@@ -90,7 +90,7 @@
 - `package.json` - add `markdownForHumans.display.editorTheme` enum under `contributes.configuration` (with `enumDescriptions`, `scope: application`).
 - `src/editor/MarkdownEditorProvider.ts` - read `editorTheme`, include it in the `update`, `ready`, and `settingsUpdate` payloads; extend `onDidChangeConfiguration` to watch `markdownForHumans.display.editorTheme`; add a `toggleTheme` message handler that calls a pure resolver and writes opposite value to global config.
 - `src/editor/themeResolver.ts` (new) - pure function `resolveToggleTarget(setting, vscodeKind) => 'defaultLight' | 'defaultDark'` so it is unit-testable without VS Code.
-- `src/webview/BubbleMenuView.ts` - add the `color-mode` toggle button (posts `{type:'toggleTheme'}`).
+- `src/webview/BubbleMenuView.ts` - add the `color-mode` toggle button as the last entry in the `buttons` array, after the `settings-button` gear (posts `{type:'toggleTheme'}`).
 - `src/webview/editor.ts` - handle `editorTheme` in `update`/`settingsUpdate`; add `applyThemeOverride(mode)` next to `applyEditorSettings()` to set/clear `mdfh-force-light`/`mdfh-force-dark` on `document.body`.
 - `src/webview/editor.css` - define `.mdfh-force-light` and `.mdfh-force-dark` blocks that override the `--vscode-*` variables the editor consumes (editor bg/fg, widget bg/border, button bg/fg, link, code bg, panel border, list hover, focus border); add `.mdfh-force-dark` as a sibling selector to the existing `.vscode-dark` syntax-highlight rules.
 
