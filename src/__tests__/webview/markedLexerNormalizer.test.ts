@@ -1,5 +1,6 @@
 /** @jest-environment node */
 
+import { marked } from 'marked';
 import {
   normalizeBlankLineGreedyTokens,
 } from '../../webview/utils/markedLexerNormalizer';
@@ -176,5 +177,90 @@ describe('normalizeBlankLineGreedyTokens – inline html rewriting', () => {
 
     const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
     expect(inlines[0]).toMatchObject(codeToken);
+  });
+
+  it('does not rewrite html tokens with empty raw', () => {
+    const emptyHtml = { type: 'html', raw: '' };
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: '\n',
+        tokens: [{ ...emptyHtml }],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    // Token should be unchanged — empty raw has nothing to preserve
+    const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
+    expect(inlines[0]).toMatchObject(emptyHtml);
+  });
+
+  it('does not rewrite html tokens with missing raw field', () => {
+    const noRaw = { type: 'html' };
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: '\n',
+        tokens: [{ ...noRaw }],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
+    expect(inlines[0]).toMatchObject(noRaw);
+  });
+
+  it('rewrites inline html tokens inside blockquotes using real marked output', () => {
+    // Use the actual marked lexer so this test is anchored to real token shapes
+    // (which include inLink, inRawBlock, block fields absent from fabricated inputs).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tokens = marked.lexer('> Use <kbd>Ctrl</kbd>\n') as unknown as any[];
+    normalizeBlankLineGreedyTokens(tokens);
+
+    // blockquote → paragraph → inline tokens
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const paragraphTokens = (tokens[0] as unknown as any).tokens[0].tokens as {
+      type: string;
+      raw: string;
+    }[];
+
+    const htmlTokens = paragraphTokens.filter(t => t.type === 'html');
+    expect(htmlTokens).toHaveLength(0); // all html tokens rewritten away
+
+    const kbdOpen = paragraphTokens.find(t => t.type === 'text' && t.raw === '<kbd>');
+    const kbdClose = paragraphTokens.find(t => t.type === 'text' && t.raw === '</kbd>');
+    expect(kbdOpen).toBeDefined();
+    expect(kbdClose).toBeDefined();
+  });
+
+  it('handles real marked inline html token shape (with inLink/inRawBlock/block fields)', () => {
+    // Verify the rewriter works with the exact token shape marked v15 emits
+    const realMarkedToken = {
+      type: 'html',
+      raw: '<sup>1</sup>',
+      inLink: false,
+      inRawBlock: true,
+      block: false,
+      text: '<sup>1</sup>',
+    };
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: 'Note<sup>1</sup>\n',
+        tokens: [
+          { type: 'text', raw: 'Note', text: 'Note', escaped: false },
+          { ...realMarkedToken },
+        ],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] })
+      .tokens;
+    // The html token is rewritten to a text token with only type/raw/text
+    expect(inlines[1]).toEqual({ type: 'text', raw: '<sup>1</sup>', text: '<sup>1</sup>' });
   });
 });
