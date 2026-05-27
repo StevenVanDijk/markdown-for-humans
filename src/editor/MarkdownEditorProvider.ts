@@ -3240,9 +3240,6 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   /**
-   * Handle setting update request from webview
-   */
-  /**
    * Toggle button: write the opposite of the currently effective appearance to
    * the global `editorTheme` setting. The write fires each open panel's own
    * `onDidChangeConfiguration` subscription, so every editor re-themes at once.
@@ -3264,6 +3261,9 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     }
   }
 
+  /**
+   * Handle setting update request from webview
+   */
   private async handleUpdateSetting(
     message: { type: string; [key: string]: unknown },
     webview: vscode.Webview
