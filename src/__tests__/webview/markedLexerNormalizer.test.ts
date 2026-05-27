@@ -1,6 +1,9 @@
 /** @jest-environment node */
 
-import { normalizeBlankLineGreedyTokens } from '../../webview/utils/markedLexerNormalizer';
+import { marked } from 'marked';
+import {
+  normalizeBlankLineGreedyTokens,
+} from '../../webview/utils/markedLexerNormalizer';
 
 describe('normalizeBlankLineGreedyTokens', () => {
   it('splits trailing blank-line newlines off a heading token into a space token', () => {
@@ -80,5 +83,184 @@ describe('normalizeBlankLineGreedyTokens', () => {
     // Source had 5 newlines after "Title" = 1 line terminator + 4 visible blank
     // lines. Standard separator covers 1 blank → 3 extras remain.
     expect(extras).toBe(3);
+  });
+});
+
+describe('normalizeBlankLineGreedyTokens – inline html rewriting', () => {
+  it('rewrites a standalone inline html token to a text token with the raw markup', () => {
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: '<br>\n',
+        tokens: [{ type: 'html', raw: '<br>', text: '<br>' }],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
+    expect(inlines[0]).toEqual({ type: 'text', raw: '<br>', text: '<br>' });
+  });
+
+  it('rewrites inline html tokens mixed with text tokens', () => {
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: 'Press <kbd>Ctrl</kbd> now\n',
+        tokens: [
+          { type: 'text', raw: 'Press ', text: 'Press ' },
+          { type: 'html', raw: '<kbd>' },
+          { type: 'text', raw: 'Ctrl', text: 'Ctrl' },
+          { type: 'html', raw: '</kbd>' },
+          { type: 'text', raw: ' now', text: ' now' },
+        ],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] })
+      .tokens;
+    expect(inlines[1]).toEqual({ type: 'text', raw: '<kbd>', text: '<kbd>' });
+    expect(inlines[3]).toEqual({ type: 'text', raw: '</kbd>', text: '</kbd>' });
+    // Non-html tokens are unchanged
+    expect(inlines[0]).toMatchObject({ type: 'text', raw: 'Press ' });
+    expect(inlines[2]).toMatchObject({ type: 'text', raw: 'Ctrl' });
+  });
+
+  it('rewrites inline html tokens inside list items', () => {
+    const tokens = [
+      {
+        type: 'list',
+        items: [
+          {
+            type: 'list_item',
+            tokens: [
+              {
+                type: 'text',
+                tokens: [
+                  { type: 'text', raw: 'Item ', text: 'Item ' },
+                  { type: 'html', raw: '<u>' },
+                  { type: 'text', raw: 'underlined', text: 'underlined' },
+                  { type: 'html', raw: '</u>' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inlines = (tokens[0] as unknown as any).items[0].tokens[0].tokens as {
+      type: string;
+      raw: string;
+      text: string;
+    }[];
+    expect(inlines[1]).toEqual({ type: 'text', raw: '<u>', text: '<u>' });
+    expect(inlines[3]).toEqual({ type: 'text', raw: '</u>', text: '</u>' });
+  });
+
+  it('does not touch non-html inline tokens', () => {
+    const codeToken = { type: 'codespan', raw: '`x`', text: 'x' };
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: '`x`\n',
+        tokens: [{ ...codeToken }],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
+    expect(inlines[0]).toMatchObject(codeToken);
+  });
+
+  it('does not rewrite html tokens with empty raw', () => {
+    const emptyHtml = { type: 'html', raw: '' };
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: '\n',
+        tokens: [{ ...emptyHtml }],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    // Token should be unchanged — empty raw has nothing to preserve
+    const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
+    expect(inlines[0]).toMatchObject(emptyHtml);
+  });
+
+  it('does not rewrite html tokens with missing raw field', () => {
+    const noRaw = { type: 'html' };
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: '\n',
+        tokens: [{ ...noRaw }],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
+    expect(inlines[0]).toMatchObject(noRaw);
+  });
+
+  it('rewrites inline html tokens inside blockquotes using real marked output', () => {
+    // Use the actual marked lexer so this test is anchored to real token shapes
+    // (which include inLink, inRawBlock, block fields absent from fabricated inputs).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tokens = marked.lexer('> Use <kbd>Ctrl</kbd>\n') as unknown as any[];
+    normalizeBlankLineGreedyTokens(tokens);
+
+    // blockquote → paragraph → inline tokens
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const paragraphTokens = (tokens[0] as unknown as any).tokens[0].tokens as {
+      type: string;
+      raw: string;
+    }[];
+
+    const htmlTokens = paragraphTokens.filter(t => t.type === 'html');
+    expect(htmlTokens).toHaveLength(0); // all html tokens rewritten away
+
+    const kbdOpen = paragraphTokens.find(t => t.type === 'text' && t.raw === '<kbd>');
+    const kbdClose = paragraphTokens.find(t => t.type === 'text' && t.raw === '</kbd>');
+    expect(kbdOpen).toBeDefined();
+    expect(kbdClose).toBeDefined();
+  });
+
+  it('handles real marked inline html token shape (with inLink/inRawBlock/block fields)', () => {
+    // Verify the rewriter works with the exact token shape marked v15 emits
+    const realMarkedToken = {
+      type: 'html',
+      raw: '<sup>1</sup>',
+      inLink: false,
+      inRawBlock: true,
+      block: false,
+      text: '<sup>1</sup>',
+    };
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: 'Note<sup>1</sup>\n',
+        tokens: [
+          { type: 'text', raw: 'Note', text: 'Note', escaped: false },
+          { ...realMarkedToken },
+        ],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] })
+      .tokens;
+    // The html token is rewritten to a text token with only type/raw/text
+    expect(inlines[1]).toEqual({ type: 'text', raw: '<sup>1</sup>', text: '<sup>1</sup>' });
   });
 });
