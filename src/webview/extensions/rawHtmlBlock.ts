@@ -27,6 +27,23 @@ import type {
  * authors can see (and optionally edit) the raw markup without it being
  * interpreted by the WYSIWYG layer.
  */
+
+export function parseRawHtmlBlock(
+  token: MarkdownToken,
+  helpers: MarkdownParseHelpers
+): JSONContent[] {
+  if (token.type !== 'html') return [];
+  const raw = typeof token.raw === 'string' ? token.raw : '';
+  // Strip all trailing newlines that marked appends to HTML block raws.
+  const content = raw.replace(/\n+$/, '');
+  if (!content) return [];
+  return [helpers.createNode('rawHtmlBlock', {}, [helpers.createTextNode(content)])];
+}
+
+export function renderRawHtmlBlock(node: JSONContent, helpers: MarkdownRendererHelpers): string {
+  return helpers.renderChildren(node.content ?? []);
+}
+
 export const RawHtmlBlock = Node.create({
   name: 'rawHtmlBlock',
 
@@ -60,16 +77,7 @@ export const RawHtmlBlock = Node.create({
 
   markdownTokenName: 'html',
 
-  parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers): JSONContent[] => {
-    if (token.type !== 'html') return [];
-    const raw = typeof token.raw === 'string' ? token.raw : '';
-    // Strip all trailing newlines that marked appends to HTML block raws.
-    const content = raw.replace(/\n+$/, '');
-    if (!content) return [];
-    return [helpers.createNode('rawHtmlBlock', {}, [helpers.createTextNode(content)])];
-  },
+  parseMarkdown: parseRawHtmlBlock,
 
-  renderMarkdown: (node: JSONContent, helpers: MarkdownRendererHelpers): string => {
-    return helpers.renderChildren(node.content ?? []);
-  },
+  renderMarkdown: renderRawHtmlBlock,
 });
