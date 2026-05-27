@@ -27,6 +27,7 @@ import { MarkdownParagraph } from './extensions/markdownParagraph';
 import { BlankLinePreservation } from './extensions/blankLinePreservation';
 import { OrderedListMarkdownFix } from './extensions/orderedListMarkdownFix';
 import { HtmlPreservingTable } from './extensions/htmlPreservingTable';
+import { RawHtmlBlock } from './extensions/rawHtmlBlock';
 import { DraggableBlocks } from './extensions/draggableBlocks';
 import { DocumentAuditExtension } from './features/auditDocument';
 import { createFormattingToolbar, createTableMenu, updateToolbarStates } from './BubbleMenuView';
@@ -549,6 +550,7 @@ function initializeEditor(initialContent: string) {
           tabSize: 2, // 2 spaces per tab (cleaner for markdown code blocks)
         }),
         BlankLinePreservation, // Converts extra blank lines (space tokens) to empty paragraphs on parse
+        RawHtmlBlock, // Preserves block-level raw HTML (claims the 'html' marked token)
         Markdown.configure({
           markedOptions: {
             gfm: true, // GitHub Flavored Markdown for tables, task lists
