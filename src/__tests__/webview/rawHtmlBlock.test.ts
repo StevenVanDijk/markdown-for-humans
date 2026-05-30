@@ -45,7 +45,12 @@ const renderMarkdown = renderRawHtmlBlock;
 
 describe('RawHtmlBlock.parseMarkdown (isolation)', () => {
   it('creates a rawHtmlBlock node from a block html token', () => {
-    const token = { type: 'html', raw: '<div>test</div>\n', block: true, text: '<div>test</div>\n' };
+    const token = {
+      type: 'html',
+      raw: '<div>test</div>\n',
+      block: true,
+      text: '<div>test</div>\n',
+    };
     const helpers = makeHelpers();
     const result = parseMarkdown(token as MarkdownToken, helpers);
 
