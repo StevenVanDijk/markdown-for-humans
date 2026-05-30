@@ -1,9 +1,7 @@
 /** @jest-environment node */
 
 import { marked } from 'marked';
-import {
-  normalizeBlankLineGreedyTokens,
-} from '../../webview/utils/markedLexerNormalizer';
+import { normalizeBlankLineGreedyTokens } from '../../webview/utils/markedLexerNormalizer';
 
 describe('normalizeBlankLineGreedyTokens', () => {
   it('splits trailing blank-line newlines off a heading token into a space token', () => {
@@ -119,8 +117,7 @@ describe('normalizeBlankLineGreedyTokens – inline html rewriting', () => {
 
     normalizeBlankLineGreedyTokens(tokens);
 
-    const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] })
-      .tokens;
+    const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] }).tokens;
     expect(inlines[1]).toEqual({ type: 'text', raw: '<kbd>', text: '<kbd>' });
     expect(inlines[3]).toEqual({ type: 'text', raw: '</kbd>', text: '</kbd>' });
     // Non-html tokens are unchanged
@@ -258,8 +255,7 @@ describe('normalizeBlankLineGreedyTokens – inline html rewriting', () => {
 
     normalizeBlankLineGreedyTokens(tokens);
 
-    const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] })
-      .tokens;
+    const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] }).tokens;
     // The html token is rewritten to a text token with only type/raw/text
     expect(inlines[1]).toEqual({ type: 'text', raw: '<sup>1</sup>', text: '<sup>1</sup>' });
   });
