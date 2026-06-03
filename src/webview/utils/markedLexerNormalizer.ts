@@ -115,9 +115,9 @@ function rewriteEmptyInlines(inlines: RawToken[]): boolean {
 
 /**
  * Recursively walk the token tree, applying inline rewriting to every
- * paragraph node we find — including paragraphs nested inside list items
- * and blockquotes. Marked's tree shape:
- *   - `paragraph`: inline tokens in `tokens`
+ * paragraph/heading/text node we find — including those nested inside list
+ * items, blockquotes and headings. Marked's tree shape:
+ *   - `paragraph`, `heading`, `lheading`: inline tokens in `tokens`
  *   - `blockquote`: child blocks in `tokens`
  *   - `list`: child items in `items`
  *   - `list_item`: child blocks in `tokens`
@@ -126,9 +126,16 @@ function normalizeEmptyInlinesDeep(tokens: RawToken[] | undefined): void {
   if (!Array.isArray(tokens)) return;
   for (const token of tokens) {
     if (!token || typeof token.type !== 'string') continue;
-    // `paragraph` (block-level) and `text` (the block-level text token marked
-    // emits for tight list items) both carry their inline tokens in `.tokens`.
-    if (token.type === 'paragraph' || token.type === 'text') {
+    // `paragraph`, `heading`, `lheading` (block-level) and `text` (the block-level
+    // text token marked emits for tight list items) all carry their inline tokens
+    // in `.tokens`. Headings must be included so inline HTML like
+    // `<!-- omit in toc -->` is preserved rather than silently dropped.
+    if (
+      token.type === 'paragraph' ||
+      token.type === 'text' ||
+      token.type === 'heading' ||
+      token.type === 'lheading'
+    ) {
       const inlines = (token as { tokens?: RawToken[] }).tokens;
       if (Array.isArray(inlines)) rewriteEmptyInlines(inlines);
       continue;

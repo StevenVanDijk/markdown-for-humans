@@ -52,6 +52,9 @@ jest.mock('./../../webview/extensions/blankLinePreservation', () => ({
   BlankLinePreservation: {},
 }));
 jest.mock('./../../webview/extensions/rawHtmlBlock', () => ({ RawHtmlBlock: {} }));
+jest.mock('./../../webview/extensions/bulletListMarkdownFix', () => ({
+  BulletListMarkdownFix: {},
+}));
 jest.mock('./../../webview/extensions/githubAlerts', () => ({ GitHubAlerts: {} }));
 jest.mock('./../../webview/BubbleMenuView', () => ({
   createFormattingToolbar: () => ({}),

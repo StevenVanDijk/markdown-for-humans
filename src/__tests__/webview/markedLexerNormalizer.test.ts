@@ -84,6 +84,67 @@ describe('normalizeBlankLineGreedyTokens', () => {
   });
 });
 
+describe('normalizeBlankLineGreedyTokens – inline html rewriting in headings', () => {
+  it('rewrites inline html tokens inside heading tokens', () => {
+    const tokens = [
+      {
+        type: 'heading',
+        raw: '## My Heading <!-- omit in toc -->\n',
+        depth: 2,
+        text: 'My Heading <!-- omit in toc -->',
+        tokens: [
+          { type: 'text', raw: 'My Heading ', text: 'My Heading ' },
+          { type: 'html', raw: '<!-- omit in toc -->' },
+        ],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] }).tokens;
+    expect(inlines[1]).toEqual({
+      type: 'text',
+      raw: '<!-- omit in toc -->',
+      text: '<!-- omit in toc -->',
+    });
+  });
+
+  it('rewrites inline html using real marked output for headings', () => {
+    const tokens = marked.lexer('## Title <!-- omit in toc -->\n') as unknown as {
+      type: string;
+      tokens?: { type: string; raw: string }[];
+    }[];
+    normalizeBlankLineGreedyTokens(tokens as unknown as { type?: string; raw?: string }[]);
+
+    const heading = tokens[0];
+    expect(heading.type).toBe('heading');
+    const inlines = heading.tokens ?? [];
+    const htmlTokens = inlines.filter(t => t.type === 'html');
+    expect(htmlTokens).toHaveLength(0); // all html tokens rewritten away
+
+    const omitToken = inlines.find(t => t.type === 'text' && t.raw === '<!-- omit in toc -->');
+    expect(omitToken).toBeDefined();
+  });
+
+  it('does not touch non-html inline tokens inside headings', () => {
+    const codeToken = { type: 'codespan', raw: '`x`', text: 'x' };
+    const tokens = [
+      {
+        type: 'heading',
+        raw: '## `x`\n',
+        depth: 2,
+        text: '`x`',
+        tokens: [{ ...codeToken }],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
+    expect(inlines[0]).toMatchObject(codeToken);
+  });
+});
+
 describe('normalizeBlankLineGreedyTokens – inline html rewriting', () => {
   it('rewrites a standalone inline html token to a text token with the raw markup', () => {
     const tokens = [
