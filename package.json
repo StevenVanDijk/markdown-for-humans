@@ -2,7 +2,7 @@
   "name": "markdown-for-humans",
   "displayName": "Markdown for Humans: WYSIWYG Editor",
   "description": "A full-featured WYSIWYG Markdown editor with visual table editing, drag-and-drop images, Mermaid diagrams, and distraction-free writing—all inside VS Code.",
-  "version": "0.2.1-ccr.2",
+  "version": "0.2.1-ccr.3",
   "publisher": "concretio",
   "author": {
     "name": "Abhinav",
@@ -232,6 +232,17 @@
           "minimum": 50,
           "maximum": 200,
           "description": "Zoom level for the editor as a percentage. 100 = default size, 150 = 50% larger, etc.",
+          "scope": "application"
+        },
+        "markdownForHumans.table.pipeStyle": {
+          "type": "string",
+          "enum": ["padded", "compact"],
+          "enumDescriptions": [
+            "Spaces around cell content: | cell content | (default)",
+            "No spaces around cell content: |cell content|"
+          ],
+          "default": "padded",
+          "description": "Controls spacing around pipe characters in GFM table cells. 'padded' adds a space after the opening pipe and before the closing pipe; 'compact' omits those spaces.",
           "scope": "application"
         }
       }

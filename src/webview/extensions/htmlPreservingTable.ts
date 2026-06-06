@@ -25,6 +25,18 @@ type MarkedTableToken = MarkdownToken & {
   align?: (string | null)[];
 };
 
+export type TablePipeStyle = 'padded' | 'compact';
+
+/**
+ * Runtime render options updated by the host (editor.ts) whenever the VS Code
+ * configuration changes. Using a module-level object lets the extension's
+ * `renderMarkdown` function — which has no access to `this.options` at call
+ * time — pick up the current setting without requiring a full extension rebuild.
+ */
+export const tableRenderOptions: { pipeStyle: TablePipeStyle } = {
+  pipeStyle: 'padded',
+};
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -73,11 +85,31 @@ function makeSeparatorCell(width: number, align: string): string {
 }
 
 /**
- * GFM table renderer that preserves column alignment stored in `node.attrs.align`.
+ * Pad `text` to exactly `width` characters, respecting column `align`.
+ * - right  → left-pad with spaces
+ * - center → equal split, extra space on right
+ * - left / default → right-pad with spaces
+ */
+function padAligned(text: string, width: number, align: string): string {
+  const pad = Math.max(0, width - text.length);
+  if (pad === 0) return text;
+  if (align === 'right') return ' '.repeat(pad) + text;
+  if (align === 'center') {
+    const padLeft = Math.floor(pad / 2);
+    return ' '.repeat(padLeft) + text + ' '.repeat(pad - padLeft);
+  }
+  return text + ' '.repeat(pad);
+}
+
+/**
+ * GFM table renderer that preserves column alignment stored in `node.attrs.align`
+ * and respects the `tableRenderOptions.pipeStyle` setting.
  *
- * Replicates the logic of `renderTableToMarkdown` from @tiptap/extension-table
- * but uses the stored alignment string to emit `:---:`, `:---`, or `---:` instead
- * of plain `---` in the separator row.
+ * - `padded`  (default): cells are padded to column width and separated by ` | `
+ * - `compact`: no padding; cells separated by `|` with no surrounding spaces
+ *
+ * Content in padded mode is aligned to match the column's declared alignment,
+ * so right-aligned columns are right-padded, center-aligned are centered, etc.
  */
 function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpers): string {
   if (!node?.content?.length) return '';
@@ -104,33 +136,45 @@ function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpe
   const columnCount = rows.reduce((max, r) => Math.max(max, r.length), 0);
   if (columnCount === 0) return '';
 
-  const colWidths = new Array<number>(columnCount).fill(3);
-  for (const row of rows) {
-    for (let i = 0; i < columnCount; i++) {
-      const len = row[i]?.text.length ?? 0;
-      if (len > colWidths[i]) colWidths[i] = len;
-    }
-  }
-
   const alignList = (typeof node.attrs?.align === 'string' ? node.attrs.align : '').split(',');
 
-  const pad = (s: string, width: number) => s + ' '.repeat(Math.max(0, width - s.length));
   const headerRow = rows[0];
   const hasHeader = headerRow?.some(c => c.isHeader) ?? false;
   const headerTexts = new Array<string>(columnCount)
     .fill('')
     .map((_, i) => (hasHeader ? (headerRow[i]?.text ?? '') : ''));
+  const body = hasHeader ? rows.slice(1) : rows;
 
   let out = '\n';
-  out += `| ${headerTexts.map((t, i) => pad(t, colWidths[i])).join(' | ')} |\n`;
-  out += `| ${colWidths.map((w, i) => makeSeparatorCell(w, alignList[i] ?? '')).join(' | ')} |\n`;
 
-  const body = hasHeader ? rows.slice(1) : rows;
-  for (const row of body) {
-    out += `| ${new Array<number>(columnCount)
+  if (tableRenderOptions.pipeStyle === 'compact') {
+    out += `|${headerTexts.join('|')}|\n`;
+    out += `|${new Array<number>(columnCount)
       .fill(0)
-      .map((_, i) => pad(row[i]?.text ?? '', colWidths[i]))
-      .join(' | ')} |\n`;
+      .map((_, i) => makeSeparatorCell(3, alignList[i] ?? ''))
+      .join('|')}|\n`;
+    for (const row of body) {
+      out += `|${new Array<number>(columnCount)
+        .fill(0)
+        .map((_, i) => row[i]?.text ?? '')
+        .join('|')}|\n`;
+    }
+  } else {
+    const colWidths = new Array<number>(columnCount).fill(3);
+    for (const row of rows) {
+      for (let i = 0; i < columnCount; i++) {
+        const len = row[i]?.text.length ?? 0;
+        if (len > colWidths[i]) colWidths[i] = len;
+      }
+    }
+    out += `| ${headerTexts.map((t, i) => padAligned(t, colWidths[i], alignList[i] ?? '')).join(' | ')} |\n`;
+    out += `| ${colWidths.map((w, i) => makeSeparatorCell(w, alignList[i] ?? '')).join(' | ')} |\n`;
+    for (const row of body) {
+      out += `| ${new Array<number>(columnCount)
+        .fill(0)
+        .map((_, i) => padAligned(row[i]?.text ?? '', colWidths[i], alignList[i] ?? ''))
+        .join(' | ')} |\n`;
+    }
   }
 
   return out;
