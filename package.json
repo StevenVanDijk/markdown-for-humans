@@ -249,6 +249,17 @@
           "default": "vscode",
           "description": "Controls the editor's color theme. 'Follow VS Code theme' mirrors your active VS Code theme. 'Always light'/'Always dark' keep the editor light or dark regardless of VS Code: when VS Code's theme already matches that appearance the editor uses your real theme, otherwise it falls back to a built-in light/dark theme. The toolbar toggle switches between light and dark and applies to all open editors.",
           "scope": "application"
+        },
+        "markdownForHumans.table.pipeStyle": {
+          "type": "string",
+          "enum": ["padded", "compact"],
+          "enumDescriptions": [
+            "Spaces around cell content: | cell content | (default)",
+            "No spaces around cell content: |cell content|"
+          ],
+          "default": "padded",
+          "description": "Controls spacing around pipe characters in GFM table cells. 'padded' adds a space after the opening pipe and before the closing pipe; 'compact' omits those spaces.",
+          "scope": "application"
         }
       }
     }

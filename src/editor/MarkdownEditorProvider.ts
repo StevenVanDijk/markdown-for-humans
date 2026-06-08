@@ -182,6 +182,12 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     return typeof kind === 'number' ? appearanceFromKind(kind) === 'dark' : false;
   }
 
+  private getTablePipeStyle(): 'padded' | 'compact' {
+    const config = vscode.workspace.getConfiguration();
+    const value = config.get<string>('markdownForHumans.table.pipeStyle', 'padded');
+    return value === 'compact' ? 'compact' : 'padded';
+  }
+
   private async syncMarkdownlintMd012(mode: BlankLineMode): Promise<void> {
     const markdownlintConfig = vscode.workspace.getConfiguration('markdownlint');
     const existing =
@@ -528,7 +534,8 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         e.affectsConfiguration('markdownForHumans.paragraph.spacingBefore') ||
         e.affectsConfiguration('markdownForHumans.paragraph.spacingAfter') ||
         e.affectsConfiguration('markdownForHumans.zoom') ||
-        e.affectsConfiguration('markdownForHumans.display.editorTheme')
+        e.affectsConfiguration('markdownForHumans.display.editorTheme') ||
+        e.affectsConfiguration('markdownForHumans.table.pipeStyle')
       ) {
         const config = vscode.workspace.getConfiguration();
         const skipWarning = config.get<boolean>('markdownForHumans.imageResize.skipWarning', false);
@@ -557,6 +564,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         const blankLineMode = this.getBlankLineMode();
         const editorTheme = this.getEditorTheme();
         const vscodeIsDark = this.isVscodeDark();
+        const tablePipeStyle = this.getTablePipeStyle();
         if (e.affectsConfiguration('markdownForHumans.blankLines.mode')) {
           void this.syncMarkdownlintMd012(blankLineMode).catch(error => {
             console.warn('[MD4H] Failed syncing markdownlint MD012 rule:', error);
@@ -584,6 +592,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
           blankLineMode,
           editorTheme,
           vscodeIsDark,
+          tablePipeStyle,
         });
       }
     });
@@ -696,6 +705,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     const zoom = config.get<number>('markdownForHumans.zoom', 100);
     const blankLineMode = this.getBlankLineMode();
     const editorTheme = this.getEditorTheme();
+    const tablePipeStyle = this.getTablePipeStyle();
 
     webview.postMessage({
       type: 'update',
@@ -711,6 +721,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       blankLineMode,
       editorTheme,
       vscodeIsDark: this.isVscodeDark(),
+      tablePipeStyle,
     });
   }
 
@@ -788,6 +799,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         const zoom = config.get<number>('markdownForHumans.zoom', 100);
         const blankLineMode = this.getBlankLineMode();
         const editorTheme = this.getEditorTheme();
+        const tablePipeStyle = this.getTablePipeStyle();
         webview.postMessage({
           type: 'settingsUpdate',
           skipResizeWarning: skipWarning,
@@ -801,6 +813,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
           blankLineMode,
           editorTheme,
           vscodeIsDark: this.isVscodeDark(),
+          tablePipeStyle,
         });
         break;
       }
