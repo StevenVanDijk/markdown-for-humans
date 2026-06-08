@@ -73,8 +73,7 @@ function renderTableCell(cell: JSONContent, tagName: 'th' | 'td'): string {
 }
 
 /**
- * Separator cell for a single column given its content width and alignment.
- * Produces exactly `width` characters so column dividers stay aligned.
+ * Separator cell for padded mode — exactly `width` characters wide.
  * Mirrors GFM spec: `:---:` = center, `:---` = left, `---:` = right, `---` = default.
  */
 function makeSeparatorCell(width: number, align: string): string {
@@ -84,7 +83,21 @@ function makeSeparatorCell(width: number, align: string): string {
   return '-'.repeat(Math.max(3, width));
 }
 
-/** Minimum column width needed to fit the alignment separator marker. */
+/**
+ * Separator cell for compact mode — `width + 2` characters wide.
+ *
+ * The compact separator row uses no surrounding spaces (`|sep|` instead of
+ * `| sep |`), so each separator cell must carry 2 extra dash characters to
+ * keep the pipe characters vertically aligned with the header and body rows.
+ */
+function makeCompactSeparatorCell(width: number, align: string): string {
+  if (align === 'center') return ':' + '-'.repeat(width) + ':';
+  if (align === 'left') return ':' + '-'.repeat(width + 1);
+  if (align === 'right') return '-'.repeat(width + 1) + ':';
+  return '-'.repeat(width + 2);
+}
+
+/** Minimum column width needed to fit the padded alignment separator marker. */
 function minSeparatorWidth(align: string): number {
   if (align === 'center') return 5; // :---:
   if (align === 'left' || align === 'right') return 4; // :--- or ---:
@@ -112,12 +125,14 @@ function padAligned(text: string, width: number, align: string): string {
  * GFM table renderer that preserves column alignment stored in `node.attrs.align`
  * and respects the `tableRenderOptions.pipeStyle` setting.
  *
- * - `padded`  (default): cells are padded to column width; all cells and separators
- *   are the same width per column so the `|` dividers are vertically aligned.
- * - `compact`: no column-width padding; cell content has exactly one space on each side.
+ * Both modes produce identical header and body rows: cells are padded to column
+ * width and content is aligned per the column's declaration (right-aligned columns
+ * are left-padded, center-aligned are centered, etc.).  The only difference is the
+ * separator row:
  *
- * In padded mode cell content is aligned to the column's declared alignment:
- * right-aligned columns are left-padded, center-aligned are centered, etc.
+ * - `padded`  (default): `| :---: | --- |`  — spaces around each separator cell.
+ * - `compact`: `|:-----:|-----|`  — no surrounding spaces; the dash count is
+ *   increased by 2 so the `|` characters stay vertically aligned with the other rows.
  */
 function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpers): string {
   if (!node?.content?.length) return '';
@@ -153,42 +168,35 @@ function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpe
     .map((_, i) => (hasHeader ? (headerRow[i]?.text ?? '') : ''));
   const body = hasHeader ? rows.slice(1) : rows;
 
-  let out = '\n';
-
-  if (tableRenderOptions.pipeStyle === 'compact') {
-    // Compact: 1 space on each side of content, no column-width padding, minimal separators.
-    out += `| ${headerTexts.join(' | ')} |\n`;
-    out += `| ${new Array<number>(columnCount)
-      .fill(0)
-      .map((_, i) => makeSeparatorCell(minSeparatorWidth(alignList[i] ?? ''), alignList[i] ?? ''))
-      .join(' | ')} |\n`;
-    for (const row of body) {
-      out += `| ${new Array<number>(columnCount)
-        .fill(0)
-        .map((_, i) => row[i]?.text ?? '')
-        .join(' | ')} |\n`;
-    }
-  } else {
-    const colWidths = new Array<number>(columnCount).fill(3);
-    for (const row of rows) {
-      for (let i = 0; i < columnCount; i++) {
-        const len = row[i]?.text.length ?? 0;
-        if (len > colWidths[i]) colWidths[i] = len;
-      }
-    }
-    // Ensure each column is wide enough for its alignment separator marker.
+  // Column widths: max of all content lengths, enforced to hold the padded separator.
+  const colWidths = new Array<number>(columnCount).fill(3);
+  for (const row of rows) {
     for (let i = 0; i < columnCount; i++) {
-      const minSep = minSeparatorWidth(alignList[i] ?? '');
-      if (colWidths[i] < minSep) colWidths[i] = minSep;
+      const len = row[i]?.text.length ?? 0;
+      if (len > colWidths[i]) colWidths[i] = len;
     }
-    out += `| ${headerTexts.map((t, i) => padAligned(t, colWidths[i], alignList[i] ?? '')).join(' | ')} |\n`;
-    out += `| ${colWidths.map((w, i) => makeSeparatorCell(w, alignList[i] ?? '')).join(' | ')} |\n`;
-    for (const row of body) {
-      out += `| ${new Array<number>(columnCount)
-        .fill(0)
-        .map((_, i) => padAligned(row[i]?.text ?? '', colWidths[i], alignList[i] ?? ''))
-        .join(' | ')} |\n`;
-    }
+  }
+  for (let i = 0; i < columnCount; i++) {
+    const minSep = minSeparatorWidth(alignList[i] ?? '');
+    if (colWidths[i] < minSep) colWidths[i] = minSep;
+  }
+
+  const headerLine = `| ${headerTexts.map((t, i) => padAligned(t, colWidths[i], alignList[i] ?? '')).join(' | ')} |`;
+  const bodyLine = (row: { text: string; isHeader: boolean }[]) =>
+    `| ${new Array<number>(columnCount)
+      .fill(0)
+      .map((_, i) => padAligned(row[i]?.text ?? '', colWidths[i], alignList[i] ?? ''))
+      .join(' | ')} |`;
+
+  const sepLine =
+    tableRenderOptions.pipeStyle === 'compact'
+      ? `|${colWidths.map((w, i) => makeCompactSeparatorCell(w, alignList[i] ?? '')).join('|')}|`
+      : `| ${colWidths.map((w, i) => makeSeparatorCell(w, alignList[i] ?? '')).join(' | ')} |`;
+
+  let out = '\n';
+  out += `${headerLine}\n${sepLine}\n`;
+  for (const row of body) {
+    out += `${bodyLine(row)}\n`;
   }
 
   return out;
