@@ -74,14 +74,21 @@ function renderTableCell(cell: JSONContent, tagName: 'th' | 'td'): string {
 
 /**
  * Separator cell for a single column given its content width and alignment.
+ * Produces exactly `width` characters so column dividers stay aligned.
  * Mirrors GFM spec: `:---:` = center, `:---` = left, `---:` = right, `---` = default.
  */
 function makeSeparatorCell(width: number, align: string): string {
-  const dashes = '-'.repeat(Math.max(3, width));
-  if (align === 'center') return `:${dashes}:`;
-  if (align === 'left') return `:${dashes}`;
-  if (align === 'right') return `${dashes}:`;
-  return dashes;
+  if (align === 'center') return ':' + '-'.repeat(Math.max(1, width - 2)) + ':';
+  if (align === 'left') return ':' + '-'.repeat(Math.max(2, width - 1));
+  if (align === 'right') return '-'.repeat(Math.max(2, width - 1)) + ':';
+  return '-'.repeat(Math.max(3, width));
+}
+
+/** Minimum column width needed to fit the alignment separator marker. */
+function minSeparatorWidth(align: string): number {
+  if (align === 'center') return 5; // :---:
+  if (align === 'left' || align === 'right') return 4; // :--- or ---:
+  return 3; // ---
 }
 
 /**
@@ -105,11 +112,12 @@ function padAligned(text: string, width: number, align: string): string {
  * GFM table renderer that preserves column alignment stored in `node.attrs.align`
  * and respects the `tableRenderOptions.pipeStyle` setting.
  *
- * - `padded`  (default): cells are padded to column width and separated by ` | `
- * - `compact`: no padding; cells separated by `|` with no surrounding spaces
+ * - `padded`  (default): cells are padded to column width; all cells and separators
+ *   are the same width per column so the `|` dividers are vertically aligned.
+ * - `compact`: no column-width padding; cell content has exactly one space on each side.
  *
- * Content in padded mode is aligned to match the column's declared alignment,
- * so right-aligned columns are right-padded, center-aligned are centered, etc.
+ * In padded mode cell content is aligned to the column's declared alignment:
+ * right-aligned columns are left-padded, center-aligned are centered, etc.
  */
 function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpers): string {
   if (!node?.content?.length) return '';
@@ -148,16 +156,17 @@ function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpe
   let out = '\n';
 
   if (tableRenderOptions.pipeStyle === 'compact') {
-    out += `|${headerTexts.join('|')}|\n`;
-    out += `|${new Array<number>(columnCount)
+    // Compact: 1 space on each side of content, no column-width padding, minimal separators.
+    out += `| ${headerTexts.join(' | ')} |\n`;
+    out += `| ${new Array<number>(columnCount)
       .fill(0)
-      .map((_, i) => makeSeparatorCell(3, alignList[i] ?? ''))
-      .join('|')}|\n`;
+      .map((_, i) => makeSeparatorCell(minSeparatorWidth(alignList[i] ?? ''), alignList[i] ?? ''))
+      .join(' | ')} |\n`;
     for (const row of body) {
-      out += `|${new Array<number>(columnCount)
+      out += `| ${new Array<number>(columnCount)
         .fill(0)
         .map((_, i) => row[i]?.text ?? '')
-        .join('|')}|\n`;
+        .join(' | ')} |\n`;
     }
   } else {
     const colWidths = new Array<number>(columnCount).fill(3);
@@ -166,6 +175,11 @@ function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpe
         const len = row[i]?.text.length ?? 0;
         if (len > colWidths[i]) colWidths[i] = len;
       }
+    }
+    // Ensure each column is wide enough for its alignment separator marker.
+    for (let i = 0; i < columnCount; i++) {
+      const minSep = minSeparatorWidth(alignList[i] ?? '');
+      if (colWidths[i] < minSep) colWidths[i] = minSep;
     }
     out += `| ${headerTexts.map((t, i) => padAligned(t, colWidths[i], alignList[i] ?? '')).join(' | ')} |\n`;
     out += `| ${colWidths.map((w, i) => makeSeparatorCell(w, alignList[i] ?? '')).join(' | ')} |\n`;

@@ -40,15 +40,13 @@ afterEach(() => {
 // ─── Compact pipe style ───────────────────────────────────────────────────────
 
 describe('compact pipe style', () => {
-  it('omits spaces around cell content', () => {
+  it('adds exactly one space on each side of cell content', () => {
     tableRenderOptions.pipeStyle = 'compact';
     const manager = createManager();
     const md = '| A | B |\n|---|---|\n| 1 | 2 |';
     const lines = getTableLines(manager.serialize(manager.parse(md)));
-    // Header row: no spaces between pipe and content
-    expect(lines[0]).toBe('|A|B|');
-    // Body row
-    expect(lines[2]).toBe('|1|2|');
+    expect(lines[0]).toBe('| A | B |');
+    expect(lines[2]).toBe('| 1 | 2 |');
   });
 
   it('uses minimal separator dashes regardless of content width', () => {
@@ -57,7 +55,7 @@ describe('compact pipe style', () => {
     const md = '| Long header text | Short |\n|---|---|\n| x | y |';
     const lines = getTableLines(manager.serialize(manager.parse(md)));
     // Separator should be minimal — just `---` for each column
-    expect(lines[1]).toBe('|---|---|');
+    expect(lines[1]).toBe('| --- | --- |');
   });
 
   it('preserves center alignment colons in compact separator', () => {
@@ -65,7 +63,7 @@ describe('compact pipe style', () => {
     const manager = createManager();
     const md = '| Version |\n|:-------:|\n| 1.0 |';
     const lines = getTableLines(manager.serialize(manager.parse(md)));
-    expect(lines[1]).toBe('|:---:|');
+    expect(lines[1]).toBe('| :---: |');
   });
 
   it('preserves left alignment colon in compact separator', () => {
@@ -73,7 +71,7 @@ describe('compact pipe style', () => {
     const manager = createManager();
     const md = '| Name |\n|:-----|\n| Alice |';
     const lines = getTableLines(manager.serialize(manager.parse(md)));
-    expect(lines[1]).toBe('|:---|');
+    expect(lines[1]).toBe('| :--- |');
   });
 
   it('preserves right alignment colon in compact separator', () => {
@@ -81,7 +79,7 @@ describe('compact pipe style', () => {
     const manager = createManager();
     const md = '| Amount |\n|-------:|\n| 100 |';
     const lines = getTableLines(manager.serialize(manager.parse(md)));
-    expect(lines[1]).toBe('|---:|');
+    expect(lines[1]).toBe('| ---: |');
   });
 
   it('preserves mixed alignments in compact separator', () => {
@@ -89,7 +87,7 @@ describe('compact pipe style', () => {
     const manager = createManager();
     const md = '| A | B | C | D |\n|:---:|---|---:|---|\n| 1 | 2 | 3 | 4 |';
     const lines = getTableLines(manager.serialize(manager.parse(md)));
-    expect(lines[1]).toBe('|:---:|---|---:|---|');
+    expect(lines[1]).toBe('| :---: | --- | ---: | --- |');
   });
 });
 
@@ -176,14 +174,51 @@ describe('content alignment padding (padded mode)', () => {
 
 // ─── tableRenderOptions singleton ────────────────────────────────────────────
 
+describe('padded mode: column divider alignment', () => {
+  it('separator row has the same column widths as header and body rows', () => {
+    tableRenderOptions.pipeStyle = 'padded';
+    const manager = createManager();
+    const md =
+      '| Version | Date       | Approved by Top Management | Score |\n' +
+      '|:-------:|------------|----------------------------:|-------|\n' +
+      '| 1.0     | 2025-01-01 | Yes                        | 42    |';
+    const lines = getTableLines(manager.serialize(manager.parse(md)));
+
+    const columnWidths = (line: string) =>
+      line
+        .split('|')
+        .filter(Boolean)
+        .map(c => c.length);
+
+    const headerWidths = columnWidths(lines[0]);
+    const sepWidths = columnWidths(lines[1]);
+    const bodyWidths = columnWidths(lines[2]);
+
+    expect(sepWidths).toEqual(headerWidths);
+    expect(bodyWidths).toEqual(headerWidths);
+  });
+
+  it('separator of a center-aligned column is the same width as cell content', () => {
+    tableRenderOptions.pipeStyle = 'padded';
+    const manager = createManager();
+    const md = '| Version |\n|:-------:|\n| 1.0     |';
+    const lines = getTableLines(manager.serialize(manager.parse(md)));
+    const headerWidth = lines[0].split('|').filter(Boolean)[0].length;
+    const sepWidth = lines[1].split('|').filter(Boolean)[0].length;
+    expect(sepWidth).toBe(headerWidth);
+  });
+});
+
 describe('tableRenderOptions singleton', () => {
   it('defaults to padded', () => {
     expect(tableRenderOptions.pipeStyle).toBe('padded');
   });
 
-  it('switching to compact changes serialisation output', () => {
+  it('switching to compact removes column-width padding', () => {
     const manager = createManager();
-    const md = '| A | B |\n|---|---|\n| 1 | 2 |';
+    // "Long header" is longer than body "x" — padded pads body to header width;
+    // compact does not.
+    const md = '| Long header | B |\n|---|---|\n| x | y |';
 
     tableRenderOptions.pipeStyle = 'padded';
     const paddedOut = manager.serialize(manager.parse(md));
@@ -192,7 +227,9 @@ describe('tableRenderOptions singleton', () => {
     const compactOut = manager.serialize(manager.parse(md));
 
     expect(paddedOut).not.toBe(compactOut);
-    expect(paddedOut).toMatch(/^\| /m);
-    expect(compactOut).toMatch(/^\|[^|]/m);
+    // Padded body row pads 'x' to the width of 'Long header'
+    expect(paddedOut).toMatch(/\| x {9,}\|/);
+    // Compact body row has just 'x' with one space each side
+    expect(compactOut).toMatch(/\| x \|/);
   });
 });
