@@ -402,6 +402,14 @@ export function createFormattingToolbar(editor: Editor): HTMLElement {
       isActive: () => editor.isActive('githubAlert'),
       items: [
         {
+          label: 'Remove alert',
+          icon: { name: 'close', fallback: '×' },
+          isEnabled: () => editor.isActive('githubAlert'),
+          action: () => {
+            editor.chain().focus().removeGithubAlert().run();
+          },
+        },
+        {
           label: ' Note',
           icon: { name: 'info', fallback: 'ℹ' },
           action: () => {
