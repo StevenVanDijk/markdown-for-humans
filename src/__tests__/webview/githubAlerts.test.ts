@@ -754,4 +754,83 @@ describe('GitHub Alerts TipTap extension markdown integration', () => {
     expect(rendered).toContain('[!NOTE]');
     expect(rendered).toContain('Test content');
   });
+
+  describe('removeGithubAlert — convert to plain blockquote', () => {
+    it('renders a githubAlert node as alert markdown', () => {
+      const alertNode: JSONContent = {
+        type: 'githubAlert',
+        attrs: { alertType: 'NOTE' },
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Important note' }] }],
+      };
+      const helpers = {
+        renderChildren: jest.fn(() => 'Important note'),
+      };
+      const output = renderMarkdown(
+        alertNode,
+        helpers as unknown as MarkdownRendererHelpers,
+        {} as RenderContext
+      );
+      expect(output).toBe('> [!NOTE]\n> Important note');
+    });
+
+    it('after conversion: blockquote node renders without alert header', () => {
+      // Simulates what removeGithubAlert produces: same content, type changed to blockquote
+      const blockquoteNode: JSONContent = {
+        type: 'blockquote',
+        attrs: {},
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Important note' }] }],
+      };
+      const helpers = {
+        renderChildren: jest.fn(() => 'Important note'),
+      };
+      const output = renderMarkdown(
+        blockquoteNode,
+        helpers as unknown as MarkdownRendererHelpers,
+        {} as RenderContext
+      );
+      expect(output).toBe('> Important note');
+      expect(output).not.toContain('[!NOTE]');
+    });
+
+    it('conversion preserves content: each alert type becomes plain blockquote', () => {
+      const alertTypes = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'] as const;
+      for (const alertType of alertTypes) {
+        const blockquoteNode: JSONContent = {
+          type: 'blockquote',
+          attrs: {},
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Content' }] }],
+        };
+        const helpers = {
+          renderChildren: jest.fn(() => 'Content'),
+        };
+        const output = renderMarkdown(
+          blockquoteNode,
+          helpers as unknown as MarkdownRendererHelpers,
+          {} as RenderContext
+        );
+        expect(output).toBe('> Content');
+        expect(output).not.toContain(`[!${alertType}]`);
+      }
+    });
+
+    it('conversion preserves multi-line content', () => {
+      const blockquoteNode: JSONContent = {
+        type: 'blockquote',
+        attrs: {},
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'First line' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Second line' }] },
+        ],
+      };
+      const helpers = {
+        renderChildren: jest.fn(() => 'First line\nSecond line'),
+      };
+      const output = renderMarkdown(
+        blockquoteNode,
+        helpers as unknown as MarkdownRendererHelpers,
+        {} as RenderContext
+      );
+      expect(output).toBe('> First line\n> Second line');
+    });
+  });
 });

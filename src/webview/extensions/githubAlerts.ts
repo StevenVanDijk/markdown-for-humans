@@ -15,6 +15,15 @@ import type {
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Fragment } from '@tiptap/pm/model';
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    githubAlert: {
+      /** Convert the GitHub alert that contains the cursor into a plain blockquote. */
+      removeGithubAlert: () => ReturnType;
+    };
+  }
+}
+
 /**
  * GitHub Alerts Extension
  *
@@ -241,6 +250,40 @@ export const GitHubAlerts = Node.create({
     helpers: MarkdownRendererHelpers,
     ctx: RenderContext
   ) => string,
+
+  addCommands() {
+    return {
+      removeGithubAlert:
+        () =>
+        ({
+          state,
+          dispatch,
+          editor,
+        }: {
+          state: import('@tiptap/pm/state').EditorState;
+          dispatch?: (tr: import('@tiptap/pm/state').Transaction) => void;
+          editor: import('@tiptap/core').Editor;
+        }) => {
+          const { $from } = state.selection;
+          const blockquoteType = editor.schema.nodes.blockquote;
+          if (!blockquoteType) return false;
+
+          for (let depth = $from.depth; depth >= 0; depth--) {
+            const node = $from.node(depth);
+            if (node.type === this.type) {
+              const pos = $from.before(depth);
+              if (dispatch) {
+                const tr = state.tr;
+                tr.replaceWith(pos, pos + node.nodeSize, blockquoteType.create(null, node.content));
+                dispatch(tr);
+              }
+              return true;
+            }
+          }
+          return false;
+        },
+    };
+  },
 
   addProseMirrorPlugins() {
     const githubAlertType = this.type;
