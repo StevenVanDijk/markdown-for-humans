@@ -252,14 +252,16 @@
         },
         "markdownForHumans.table.pipeStyle": {
           "type": "string",
-          "enum": ["padded", "compact"],
+          "enum": [
+            "padded",
+            "compact"
+          ],
           "enumDescriptions": [
-            "Spaces around cell content: | cell content | (default)",
-            "No spaces around cell content: |cell content|"
+            "Separator row uses spaces: | :---: | --- | (default)",
+            "Separator row omits spaces: |:-----:|-----|"
           ],
           "default": "padded",
-          "description": "Controls spacing around pipe characters in GFM table cells. 'padded' adds a space after the opening pipe and before the closing pipe; 'compact' omits those spaces.",
-          "scope": "application"
+          "description": "Controls spacing in the GFM table separator row. Both styles pad cell content with spaces; only the separator row differs."
         }
       }
     }
