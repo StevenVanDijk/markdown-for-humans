@@ -27,7 +27,7 @@ import { ImageEnterSpacing } from './extensions/imageEnterSpacing';
 import { MarkdownParagraph } from './extensions/markdownParagraph';
 import { BlankLinePreservation } from './extensions/blankLinePreservation';
 import { OrderedListMarkdownFix } from './extensions/orderedListMarkdownFix';
-import { HtmlPreservingTable } from './extensions/htmlPreservingTable';
+import { HtmlPreservingTable, tableRenderOptions } from './extensions/htmlPreservingTable';
 import { DraggableBlocks } from './extensions/draggableBlocks';
 import { DocumentAuditExtension } from './features/auditDocument';
 import { createFormattingToolbar, createTableMenu, updateToolbarStates } from './BubbleMenuView';
@@ -1039,6 +1039,9 @@ window.addEventListener('message', (event: MessageEvent) => {
         if (message.blankLineMode === 'preserve' || message.blankLineMode === 'strip') {
           blankLineMode = message.blankLineMode;
         }
+        if (message.tablePipeStyle === 'compact' || message.tablePipeStyle === 'padded') {
+          tableRenderOptions.pipeStyle = message.tablePipeStyle;
+        }
         // Store imagePath setting if present
         if (typeof message.imagePath === 'string') {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1071,6 +1074,9 @@ window.addEventListener('message', (event: MessageEvent) => {
         }
         if (message.blankLineMode === 'preserve' || message.blankLineMode === 'strip') {
           blankLineMode = message.blankLineMode;
+        }
+        if (message.tablePipeStyle === 'compact' || message.tablePipeStyle === 'padded') {
+          tableRenderOptions.pipeStyle = message.tablePipeStyle;
         }
         // Update imagePath setting
         if (typeof message.imagePath === 'string') {

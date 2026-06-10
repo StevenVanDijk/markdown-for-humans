@@ -233,6 +233,19 @@
           "maximum": 200,
           "description": "Zoom level for the editor as a percentage. 100 = default size, 150 = 50% larger, etc.",
           "scope": "application"
+        },
+        "markdownForHumans.table.pipeStyle": {
+          "type": "string",
+          "enum": [
+            "padded",
+            "compact"
+          ],
+          "enumDescriptions": [
+            "Separator row uses spaces: | :---: | --- | (default)",
+            "Separator row omits spaces: |:-------:|-----|"
+          ],
+          "default": "padded",
+          "description": "Controls spacing in the GFM table separator row. Both styles pad cell content with spaces; only the separator row differs."
         }
       }
     }

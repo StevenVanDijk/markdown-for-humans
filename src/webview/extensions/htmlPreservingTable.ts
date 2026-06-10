@@ -25,6 +25,18 @@ type MarkedTableToken = MarkdownToken & {
   align?: (string | null)[];
 };
 
+export type TablePipeStyle = 'padded' | 'compact';
+
+/**
+ * Runtime render options updated by the host (editor.ts) whenever the VS Code
+ * configuration changes. Using a module-level object lets the extension's
+ * `renderMarkdown` function — which has no access to `this.options` at call
+ * time — pick up the current setting without requiring a full extension rebuild.
+ */
+export const tableRenderOptions: { pipeStyle: TablePipeStyle } = {
+  pipeStyle: 'padded',
+};
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -61,23 +73,66 @@ function renderTableCell(cell: JSONContent, tagName: 'th' | 'td'): string {
 }
 
 /**
- * Separator cell for a single column given its content width and alignment.
+ * Separator cell for padded mode — exactly `width` characters wide.
  * Mirrors GFM spec: `:---:` = center, `:---` = left, `---:` = right, `---` = default.
  */
 function makeSeparatorCell(width: number, align: string): string {
-  const dashes = '-'.repeat(Math.max(3, width));
-  if (align === 'center') return `:${dashes}:`;
-  if (align === 'left') return `:${dashes}`;
-  if (align === 'right') return `${dashes}:`;
-  return dashes;
+  if (align === 'center') return ':' + '-'.repeat(Math.max(1, width - 2)) + ':';
+  if (align === 'left') return ':' + '-'.repeat(Math.max(2, width - 1));
+  if (align === 'right') return '-'.repeat(Math.max(2, width - 1)) + ':';
+  return '-'.repeat(Math.max(3, width));
 }
 
 /**
- * GFM table renderer that preserves column alignment stored in `node.attrs.align`.
+ * Separator cell for compact mode — `width + 2` characters wide.
  *
- * Replicates the logic of `renderTableToMarkdown` from @tiptap/extension-table
- * but uses the stored alignment string to emit `:---:`, `:---`, or `---:` instead
- * of plain `---` in the separator row.
+ * The compact separator row uses no surrounding spaces (`|sep|` instead of
+ * `| sep |`), so each separator cell must carry 2 extra dash characters to
+ * keep the pipe characters vertically aligned with the header and body rows.
+ */
+function makeCompactSeparatorCell(width: number, align: string): string {
+  if (align === 'center') return ':' + '-'.repeat(width) + ':';
+  if (align === 'left') return ':' + '-'.repeat(width + 1);
+  if (align === 'right') return '-'.repeat(width + 1) + ':';
+  return '-'.repeat(width + 2);
+}
+
+/** Minimum column width needed to fit the padded alignment separator marker. */
+function minSeparatorWidth(align: string): number {
+  if (align === 'center') return 5; // :---:
+  if (align === 'left' || align === 'right') return 4; // :--- or ---:
+  return 3; // ---
+}
+
+/**
+ * Pad `text` to exactly `width` characters, respecting column `align`.
+ * - right  → left-pad with spaces
+ * - center → equal split, extra space on right
+ * - left / default → right-pad with spaces
+ */
+function padAligned(text: string, width: number, align: string): string {
+  const pad = Math.max(0, width - text.length);
+  if (pad === 0) return text;
+  if (align === 'right') return ' '.repeat(pad) + text;
+  if (align === 'center') {
+    const padLeft = Math.floor(pad / 2);
+    return ' '.repeat(padLeft) + text + ' '.repeat(pad - padLeft);
+  }
+  return text + ' '.repeat(pad);
+}
+
+/**
+ * GFM table renderer that preserves column alignment stored in `node.attrs.align`
+ * and respects the `tableRenderOptions.pipeStyle` setting.
+ *
+ * Both modes produce identical header and body rows: cells are padded to column
+ * width and content is aligned per the column's declaration (right-aligned columns
+ * are left-padded, center-aligned are centered, etc.).  The only difference is the
+ * separator row:
+ *
+ * - `padded`  (default): `| :---: | --- |`  — spaces around each separator cell.
+ * - `compact`: `|:-----:|-----|`  — no surrounding spaces; the dash count is
+ *   increased by 2 so the `|` characters stay vertically aligned with the other rows.
  */
 function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpers): string {
   if (!node?.content?.length) return '';
@@ -104,6 +159,16 @@ function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpe
   const columnCount = rows.reduce((max, r) => Math.max(max, r.length), 0);
   if (columnCount === 0) return '';
 
+  const alignList = (typeof node.attrs?.align === 'string' ? node.attrs.align : '').split(',');
+
+  const headerRow = rows[0];
+  const hasHeader = headerRow?.some(c => c.isHeader) ?? false;
+  const headerTexts = new Array<string>(columnCount)
+    .fill('')
+    .map((_, i) => (hasHeader ? (headerRow[i]?.text ?? '') : ''));
+  const body = hasHeader ? rows.slice(1) : rows;
+
+  // Column widths: max of all content lengths, enforced to hold the padded separator.
   const colWidths = new Array<number>(columnCount).fill(3);
   for (const row of rows) {
     for (let i = 0; i < columnCount; i++) {
@@ -111,26 +176,27 @@ function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpe
       if (len > colWidths[i]) colWidths[i] = len;
     }
   }
+  for (let i = 0; i < columnCount; i++) {
+    const minSep = minSeparatorWidth(alignList[i] ?? '');
+    if (colWidths[i] < minSep) colWidths[i] = minSep;
+  }
 
-  const alignList = (typeof node.attrs?.align === 'string' ? node.attrs.align : '').split(',');
+  const headerLine = `| ${headerTexts.map((t, i) => padAligned(t, colWidths[i], alignList[i] ?? '')).join(' | ')} |`;
+  const bodyLine = (row: { text: string; isHeader: boolean }[]) =>
+    `| ${new Array<number>(columnCount)
+      .fill(0)
+      .map((_, i) => padAligned(row[i]?.text ?? '', colWidths[i], alignList[i] ?? ''))
+      .join(' | ')} |`;
 
-  const pad = (s: string, width: number) => s + ' '.repeat(Math.max(0, width - s.length));
-  const headerRow = rows[0];
-  const hasHeader = headerRow?.some(c => c.isHeader) ?? false;
-  const headerTexts = new Array<string>(columnCount)
-    .fill('')
-    .map((_, i) => (hasHeader ? (headerRow[i]?.text ?? '') : ''));
+  const sepLine =
+    tableRenderOptions.pipeStyle === 'compact'
+      ? `|${colWidths.map((w, i) => makeCompactSeparatorCell(w, alignList[i] ?? '')).join('|')}|`
+      : `| ${colWidths.map((w, i) => makeSeparatorCell(w, alignList[i] ?? '')).join(' | ')} |`;
 
   let out = '\n';
-  out += `| ${headerTexts.map((t, i) => pad(t, colWidths[i])).join(' | ')} |\n`;
-  out += `| ${colWidths.map((w, i) => makeSeparatorCell(w, alignList[i] ?? '')).join(' | ')} |\n`;
-
-  const body = hasHeader ? rows.slice(1) : rows;
+  out += `${headerLine}\n${sepLine}\n`;
   for (const row of body) {
-    out += `| ${new Array<number>(columnCount)
-      .fill(0)
-      .map((_, i) => pad(row[i]?.text ?? '', colWidths[i]))
-      .join(' | ')} |\n`;
+    out += `${bodyLine(row)}\n`;
   }
 
   return out;
