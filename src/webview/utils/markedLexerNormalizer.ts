@@ -87,8 +87,8 @@ function isEmptyLinkLike(tok: RawToken): boolean {
 }
 
 /**
- * Walk a paragraph's inline-token array and replace every empty link/image or
- * raw HTML tag with a literal-text token carrying its raw markdown. Mutates
+ * Walk a paragraph's inline-token array and replace every empty link/image,
+ * raw HTML tag, or backslash-escape token with a literal-text token. Mutates
  * the array in place. Returns whether any rewrite happened.
  *
  * Inline `html` tokens (e.g. `<kbd>`, `</kbd>`, `<br>`) have no handler in
@@ -96,13 +96,24 @@ function isEmptyLinkLike(tok: RawToken): boolean {
  * to text nodes preserves the raw markup through the round-trip: the text node
  * serialises back verbatim, and on re-parse the same rewrite fires again so
  * the cycle is stable.
+ *
+ * `escape` tokens (e.g. `\<`, `\>`) likewise have no handler and are silently
+ * dropped by @tiptap/markdown, causing `\<class\>` to become `class`. We
+ * convert them to text nodes carrying the unescaped character (`token.text`),
+ * so `\<class\>` is preserved as `<class>` in the editor. On re-parse the
+ * resulting `<class>` is an inline html token, which the html-branch above
+ * then converts back to text, keeping the cycle stable.
  */
 function rewriteEmptyInlines(inlines: RawToken[]): boolean {
   let changed = false;
   for (let i = 0; i < inlines.length; i++) {
     const tok = inlines[i];
     if (!tok) continue;
-    if (isEmptyLinkLike(tok) || tok.type === 'html') {
+    if (tok.type === 'escape') {
+      const text = typeof tok.text === 'string' ? tok.text : '';
+      inlines[i] = { type: 'text', raw: text, text } as RawToken;
+      changed = true;
+    } else if (isEmptyLinkLike(tok) || tok.type === 'html') {
       const raw = typeof tok.raw === 'string' ? tok.raw : '';
       if (raw.length > 0) {
         inlines[i] = { type: 'text', raw, text: raw } as RawToken;
