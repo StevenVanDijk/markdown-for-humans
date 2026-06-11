@@ -323,7 +323,7 @@ describe('normalizeBlankLineGreedyTokens – inline html rewriting', () => {
 });
 
 describe('normalizeBlankLineGreedyTokens – escape token rewriting', () => {
-  it('rewrites a backslash-escape token to a text token with the unescaped character', () => {
+  it('rewrites a backslash-escape token to a text token carrying the raw escape sequence', () => {
     const tokens = [
       {
         type: 'paragraph',
@@ -339,9 +339,9 @@ describe('normalizeBlankLineGreedyTokens – escape token rewriting', () => {
     normalizeBlankLineGreedyTokens(tokens);
 
     const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] }).tokens;
-    expect(inlines[0]).toEqual({ type: 'text', raw: '<', text: '<' });
+    expect(inlines[0]).toEqual({ type: 'text', raw: '\\<', text: '\\<' });
     expect(inlines[1]).toEqual({ type: 'text', raw: 'class', text: 'class', escaped: false });
-    expect(inlines[2]).toEqual({ type: 'text', raw: '>', text: '>' });
+    expect(inlines[2]).toEqual({ type: 'text', raw: '\\>', text: '\\>' });
   });
 
   it('rewrites escape tokens using real marked output for \\<class\\>', () => {
@@ -356,7 +356,7 @@ describe('normalizeBlankLineGreedyTokens – escape token rewriting', () => {
     const types = inlines.map(t => t.type);
     expect(types).not.toContain('escape');
     const text = inlines.map(t => t.text).join('');
-    expect(text).toBe('<class>');
+    expect(text).toBe('\\<class\\>');
   });
 
   it('rewrites escape tokens inside a list item', () => {
@@ -374,7 +374,42 @@ describe('normalizeBlankLineGreedyTokens – escape token rewriting', () => {
     const types = itemInlines.map((t: { type: string }) => t.type);
     expect(types).not.toContain('escape');
     const combined = itemInlines.map((t: { text: string }) => t.text).join('');
-    expect(combined).toContain('<class>');
+    expect(combined).toContain('\\<class\\>');
+  });
+
+  it('rewrites escape tokens for every character escapable in markdown', () => {
+    const chars = '\\`*_{}[]<>()#+-.!|'.split('');
+    for (const ch of chars) {
+      const input = `a \\${ch} b`;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tokens = marked.lexer(input) as unknown as any[];
+      normalizeBlankLineGreedyTokens(tokens);
+
+      const para = tokens[0] as { tokens: { type: string; text: string }[] };
+      const types = para.tokens.map(t => t.type);
+      expect(types).not.toContain('escape');
+      const text = para.tokens.map(t => t.text).join('');
+      expect(text).toBe(`a \\${ch} b`);
+    }
+  });
+
+  it('rewrites escape tokens inside table cells', () => {
+    const input = '| h1 | h2 |\n|---|---|\n| a \\* b | c \\< d |';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tokens = marked.lexer(input) as unknown as any[];
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const table = tokens[0] as {
+      type: string;
+      rows: { tokens: { type: string; text: string }[] }[][];
+    };
+    expect(table.type).toBe('table');
+    for (const cell of table.rows[0]) {
+      const types = cell.tokens.map(t => t.type);
+      expect(types).not.toContain('escape');
+    }
+    expect(table.rows[0][0].tokens.map(t => t.text).join('')).toBe('a \\* b');
+    expect(table.rows[0][1].tokens.map(t => t.text).join('')).toBe('c \\< d');
   });
 
   it('does not alter text tokens or other non-escape inline tokens', () => {

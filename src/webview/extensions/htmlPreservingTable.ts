@@ -149,7 +149,14 @@ function renderGfmTableWithAlignment(node: JSONContent, h: MarkdownRendererHelpe
         } else {
           raw = h.renderChildren(content);
         }
-        const text = (raw || '').replace(/\s+/g, ' ').trim();
+        // A literal `|` inside a cell would terminate the cell when the file
+        // is re-parsed, so it must be written as `\|` (GFM unescapes it when
+        // splitting rows into cells). Pipes that are already escaped are left
+        // alone to avoid double-escaping.
+        const text = (raw || '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .replace(/(?<!\\)\|/g, '\\|');
         cells.push({ text, isHeader: cellNode.type === 'tableHeader' });
       }
     }
