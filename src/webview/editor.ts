@@ -691,13 +691,15 @@ function initializeEditor(initialContent: string) {
     // works for paragraph-followed-by-blank-lines cases.
     try {
       const markdownStorage = editorInstance as unknown as {
-        markdown?: { instance?: unknown };
-        storage?: { markdown?: { instance?: unknown } };
+        markdown?: unknown;
+        storage?: { markdown?: unknown };
       };
-      const markedInstance =
-        markdownStorage.markdown?.instance ?? markdownStorage.storage?.markdown?.instance;
-      if (markedInstance) {
-        installBlankLineLexerNormalizer(markedInstance);
+      // Pass the MarkdownManager (editor.markdown) so installBlankLineLexerNormalizer
+      // can patch both the lexer AND the serializer's encodeTextForMarkdown.
+      const markdownManager =
+        markdownStorage.markdown ?? markdownStorage.storage?.markdown;
+      if (markdownManager) {
+        installBlankLineLexerNormalizer(markdownManager);
       }
     } catch (error) {
       console.warn('[MD4H] Failed to install blank-line lexer normalizer:', error);
