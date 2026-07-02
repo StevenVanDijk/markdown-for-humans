@@ -57,14 +57,9 @@ function createRealEditor(initialMarkdown: string): Editor {
     content: '',
     contentType: 'markdown',
   });
-  const markdownStorage = editor as unknown as {
-    markdown?: { instance?: unknown };
-    storage?: { markdown?: { instance?: unknown } };
-  };
-  const markedInstance =
-    markdownStorage.markdown?.instance ?? markdownStorage.storage?.markdown?.instance;
-  if (markedInstance) {
-    installBlankLineLexerNormalizer(markedInstance);
+  const markdownManager = (editor as unknown as { markdown?: unknown }).markdown;
+  if (markdownManager) {
+    installBlankLineLexerNormalizer(markdownManager);
   }
   if (initialMarkdown) {
     editor.commands.setContent(initialMarkdown, { contentType: 'markdown' });

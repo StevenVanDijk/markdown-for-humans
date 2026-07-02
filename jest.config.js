@@ -32,7 +32,10 @@ module.exports = {
     moduleNameMapper: {
         '^vscode$': '<rootDir>/src/__mocks__/vscode.ts',
         '^mermaid$': '<rootDir>/src/__mocks__/mermaid.ts',
-        '\\.(css|less|scss)$': '<rootDir>/src/__mocks__/styleMock.ts'
+        '\\.(css|less|scss)$': '<rootDir>/src/__mocks__/styleMock.ts',
+        // marked@17 is ESM-only; Jest 29's CJS loader can't require() it directly.
+        // Re-export the instance already bundled inside @tiptap/markdown's CJS build.
+        '^marked$': '<rootDir>/src/__mocks__/marked.js'
     },
     setupFiles: ['<rootDir>/src/__tests__/setup.ts'],
     setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup-after-env.ts'],
