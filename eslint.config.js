@@ -47,7 +47,7 @@ module.exports = [
         }
     },
     {
-        files: ['scripts/**/*.js'],
+        files: ['scripts/**/*.js', 'src/__mocks__/**/*.js'],
         languageOptions: {
             globals: {
                 process: 'readonly',
@@ -60,8 +60,8 @@ module.exports = [
             sourceType: 'commonjs',
         },
         rules: {
-            'no-console': 'off', // Build scripts can use console.log
-            '@typescript-eslint/no-require-imports': 'off', // Node.js build scripts use require
+            'no-console': 'off', // Build scripts / Jest mocks can use console.log
+            '@typescript-eslint/no-require-imports': 'off', // CommonJS build scripts and Jest mocks use require
             '@typescript-eslint/no-var-requires': 'off'
         }
     }
