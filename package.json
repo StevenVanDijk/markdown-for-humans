@@ -2,7 +2,7 @@
   "name": "markdown-for-humans",
   "displayName": "Markdown for Humans: WYSIWYG Editor",
   "description": "A full-featured WYSIWYG Markdown editor with visual table editing, drag-and-drop images, Mermaid diagrams, and distraction-free writing—all inside VS Code.",
-  "version": "0.2.1-ccr.7",
+  "version": "0.2.1-ccr.8",
   "publisher": "concretio",
   "author": {
     "name": "Abhinav",
@@ -246,6 +246,22 @@
           ],
           "default": "padded",
           "description": "Controls spacing in the GFM table separator row. Both styles pad cell content with spaces; only the separator row differs."
+        },
+        "markdownForHumans.display.editorTheme": {
+          "type": "string",
+          "enum": [
+            "vscode",
+            "defaultLight",
+            "defaultDark"
+          ],
+          "enumDescriptions": [
+            "Follow VS Code theme",
+            "Always use a light theme",
+            "Always use a dark theme"
+          ],
+          "default": "vscode",
+          "description": "Controls the editor's color theme. 'Follow VS Code theme' mirrors your active VS Code theme. 'Always light'/'Always dark' keep the editor light or dark regardless of VS Code: when VS Code's theme already matches that appearance the editor uses your real theme, otherwise it falls back to a built-in light/dark theme. The toolbar toggle switches between light and dark and applies to all open editors.",
+          "scope": "application"
         }
       }
     }
