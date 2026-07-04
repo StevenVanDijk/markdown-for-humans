@@ -286,9 +286,7 @@ export function installBlankLineLexerNormalizer(managerOrMarked: unknown): void 
   if (manager.__mdh_blankLineNormalizerInstalled) return;
 
   // Resolve the underlying marked instance (either via .instance getter or directly).
-  const markedInst = (
-    manager.instance !== undefined ? manager.instance : manager
-  ) as ManagerLike;
+  const markedInst = (manager.instance !== undefined ? manager.instance : manager) as ManagerLike;
 
   // --- Lexer patch (primary path in @tiptap/markdown ≥3.26) ---
   // Patch createLexer so the Lexer instance returned has its .lex() wrapped.

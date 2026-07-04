@@ -677,8 +677,7 @@ function initializeEditor(initialContent: string) {
       };
       // Pass the MarkdownManager (editor.markdown) so installBlankLineLexerNormalizer
       // can patch both the lexer AND the serializer's encodeTextForMarkdown.
-      const markdownManager =
-        markdownStorage.markdown ?? markdownStorage.storage?.markdown;
+      const markdownManager = markdownStorage.markdown ?? markdownStorage.storage?.markdown;
       if (markdownManager) {
         installBlankLineLexerNormalizer(markdownManager);
       }
