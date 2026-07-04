@@ -321,3 +321,127 @@ describe('normalizeBlankLineGreedyTokens – inline html rewriting', () => {
     expect(inlines[1]).toEqual({ type: 'text', raw: '<sup>1</sup>', text: '<sup>1</sup>' });
   });
 });
+
+describe('normalizeBlankLineGreedyTokens – escape token rewriting', () => {
+  const ESCAPABLE_CHARS = '\\`*_{}[]<>()#+-.!|'.split('');
+
+  it.each(ESCAPABLE_CHARS.map(ch => ({ ch })))(
+    'rewrites a fabricated escape token for "%s" to a raw text token',
+    ({ ch }) => {
+      const raw = `\\${ch}`;
+      const tokens = [
+        {
+          type: 'paragraph',
+          raw: `a ${raw} b\n`,
+          tokens: [
+            { type: 'text', raw: 'a ', text: 'a ' },
+            { type: 'escape', raw, text: ch },
+            { type: 'text', raw: ' b', text: ' b' },
+          ],
+        },
+      ];
+
+      normalizeBlankLineGreedyTokens(tokens);
+
+      const inlines = (tokens[0] as { tokens: { type: string; raw: string; text: string }[] })
+        .tokens;
+      expect(inlines[1]).toEqual({ type: 'text', raw, text: raw });
+    }
+  );
+
+  it('rewrites escape tokens using real marked output', () => {
+    const tokens = marked.lexer('classified \\<class\\>\n') as unknown as {
+      type: string;
+      tokens?: { type: string; raw: string }[];
+    }[];
+    normalizeBlankLineGreedyTokens(tokens as unknown as { type?: string; raw?: string }[]);
+
+    const paragraph = tokens[0];
+    const inlines = paragraph.tokens ?? [];
+    const escapeTokens = inlines.filter(t => t.type === 'escape');
+    expect(escapeTokens).toHaveLength(0); // all escape tokens rewritten away
+
+    const opening = inlines.find(t => t.type === 'text' && t.raw === '\\<');
+    const closing = inlines.find(t => t.type === 'text' && t.raw === '\\>');
+    expect(opening).toBeDefined();
+    expect(closing).toBeDefined();
+  });
+
+  it('rewrites escape tokens inside list items', () => {
+    const tokens = [
+      {
+        type: 'list',
+        items: [
+          {
+            type: 'list_item',
+            tokens: [
+              {
+                type: 'text',
+                tokens: [
+                  { type: 'text', raw: 'classified ', text: 'classified ' },
+                  { type: 'escape', raw: '\\<', text: '<' },
+                  { type: 'text', raw: 'class', text: 'class' },
+                  { type: 'escape', raw: '\\>', text: '>' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inlines = (tokens[0] as unknown as any).items[0].tokens[0].tokens as {
+      type: string;
+      raw: string;
+      text: string;
+    }[];
+    expect(inlines[1]).toEqual({ type: 'text', raw: '\\<', text: '\\<' });
+    expect(inlines[3]).toEqual({ type: 'text', raw: '\\>', text: '\\>' });
+  });
+
+  it('rewrites escape tokens inside table cells', () => {
+    const tokens = [
+      {
+        type: 'table',
+        header: [{ tokens: [{ type: 'text', raw: 'h1', text: 'h1' }] }],
+        rows: [
+          [
+            {
+              tokens: [
+                { type: 'text', raw: 'a ', text: 'a ' },
+                { type: 'escape', raw: '\\|', text: '|' },
+                { type: 'text', raw: ' b', text: ' b' },
+              ],
+            },
+          ],
+        ],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const table = tokens[0] as unknown as {
+      rows: { tokens: { type: string; raw: string; text: string }[] }[][];
+    };
+    const cellInlines = table.rows[0][0].tokens;
+    expect(cellInlines[1]).toEqual({ type: 'text', raw: '\\|', text: '\\|' });
+  });
+
+  it('does not rewrite escape tokens with a missing raw field, falling back to `\\` + text', () => {
+    const tokens = [
+      {
+        type: 'paragraph',
+        raw: '\\*\n',
+        tokens: [{ type: 'escape', text: '*' }],
+      },
+    ];
+
+    normalizeBlankLineGreedyTokens(tokens);
+
+    const inlines = (tokens[0] as { tokens: unknown[] }).tokens;
+    expect(inlines[0]).toEqual({ type: 'text', raw: '\\*', text: '\\*' });
+  });
+});

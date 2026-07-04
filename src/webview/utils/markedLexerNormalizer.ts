@@ -87,8 +87,8 @@ function isEmptyLinkLike(tok: RawToken): boolean {
 }
 
 /**
- * Walk a paragraph's inline-token array and replace every empty link/image or
- * raw HTML tag with a literal-text token carrying its raw markdown. Mutates
+ * Walk a paragraph's inline-token array and replace every empty link/image,
+ * raw HTML tag, or backslash-escape token with a literal-text token. Mutates
  * the array in place. Returns whether any rewrite happened.
  *
  * Inline `html` tokens (e.g. `<kbd>`, `</kbd>`, `<br>`) have no handler in
@@ -96,13 +96,29 @@ function isEmptyLinkLike(tok: RawToken): boolean {
  * to text nodes preserves the raw markup through the round-trip: the text node
  * serialises back verbatim, and on re-parse the same rewrite fires again so
  * the cycle is stable.
+ *
+ * `escape` tokens (e.g. `\<`, `\*`) have no handler either — marked tokenizes
+ * `\<class\>` as an `escape` token per character, and @tiptap/markdown's
+ * fallback parser drops any token type it doesn't recognise, silently turning
+ * `\<class\>` into `class`. We rewrite each escape token to a text node
+ * carrying the RAW sequence (`token.raw`, e.g. `\<`) rather than the unescaped
+ * character, so the serialiser (which emits text nodes verbatim) writes the
+ * backslash back out: `\<class\>` round-trips byte-identically instead of
+ * degrading to `<class>` (an HTML tag) or `class` (content loss). On re-parse
+ * the same escape tokens are produced and rewritten again, keeping the cycle
+ * stable — the same strategy used for raw inline HTML above.
  */
 function rewriteEmptyInlines(inlines: RawToken[]): boolean {
   let changed = false;
   for (let i = 0; i < inlines.length; i++) {
     const tok = inlines[i];
     if (!tok) continue;
-    if (isEmptyLinkLike(tok) || tok.type === 'html') {
+    if (tok.type === 'escape') {
+      const text = typeof tok.text === 'string' ? tok.text : '';
+      const raw = typeof tok.raw === 'string' && tok.raw.length > 0 ? tok.raw : `\\${text}`;
+      inlines[i] = { type: 'text', raw, text: raw } as RawToken;
+      changed = true;
+    } else if (isEmptyLinkLike(tok) || tok.type === 'html') {
       const raw = typeof tok.raw === 'string' ? tok.raw : '';
       if (raw.length > 0) {
         inlines[i] = { type: 'text', raw, text: raw } as RawToken;
@@ -121,6 +137,8 @@ function rewriteEmptyInlines(inlines: RawToken[]): boolean {
  *   - `blockquote`: child blocks in `tokens`
  *   - `list`: child items in `items`
  *   - `list_item`: child blocks in `tokens`
+ *   - `table`: cells in `header` (array) and `rows` (array of arrays), each
+ *     cell carrying its inline tokens in `tokens`
  */
 function normalizeEmptyInlinesDeep(tokens: RawToken[] | undefined): void {
   if (!Array.isArray(tokens)) return;
@@ -144,8 +162,25 @@ function normalizeEmptyInlinesDeep(tokens: RawToken[] | undefined): void {
       normalizeEmptyInlinesDeep((token as { items?: RawToken[] }).items);
       continue;
     }
-    if (token.type === 'list_item' || token.type === 'blockquote' || token.type === 'table') {
+    if (token.type === 'list_item' || token.type === 'blockquote') {
       normalizeEmptyInlinesDeep((token as { tokens?: RawToken[] }).tokens);
+      continue;
+    }
+    if (token.type === 'table') {
+      // Marked table tokens carry their cells in `header` / `rows`, not
+      // `tokens`; each cell has its own inline-token array.
+      const table = token as {
+        header?: { tokens?: RawToken[] }[];
+        rows?: { tokens?: RawToken[] }[][];
+      };
+      for (const cell of table.header ?? []) {
+        if (Array.isArray(cell?.tokens)) rewriteEmptyInlines(cell.tokens);
+      }
+      for (const row of table.rows ?? []) {
+        for (const cell of row ?? []) {
+          if (Array.isArray(cell?.tokens)) rewriteEmptyInlines(cell.tokens);
+        }
+      }
       continue;
     }
   }
