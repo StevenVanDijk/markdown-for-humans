@@ -97,16 +97,16 @@ function isEmptyLinkLike(tok: RawToken): boolean {
  * serialises back verbatim, and on re-parse the same rewrite fires again so
  * the cycle is stable.
  *
- * `escape` tokens (e.g. `\<`, `\*`) have no handler either — marked tokenizes
- * `\<class\>` as an `escape` token per character, and @tiptap/markdown's
- * fallback parser drops any token type it doesn't recognise, silently turning
- * `\<class\>` into `class`. We rewrite each escape token to a text node
- * carrying the RAW sequence (`token.raw`, e.g. `\<`) rather than the unescaped
- * character, so the serialiser (which emits text nodes verbatim) writes the
- * backslash back out: `\<class\>` round-trips byte-identically instead of
- * degrading to `<class>` (an HTML tag) or `class` (content loss). On re-parse
- * the same escape tokens are produced and rewritten again, keeping the cycle
- * stable — the same strategy used for raw inline HTML above.
+ * `escape` tokens (e.g. `\<`, `\*`) likewise have no round-trip guarantee
+ * under @tiptap/markdown ≥3.25's serialiser, which applies `encodeHtmlEntities`
+ * and `escapeMarkdownSyntax` to all text nodes. We convert escape tokens to
+ * text nodes carrying the RAW escape sequence (`token.raw`, e.g. `\<`), not
+ * the unescaped character. `installBlankLineLexerNormalizer` patches
+ * `encodeTextForMarkdown` to be a no-op, so these verbatim text nodes are
+ * emitted as-is: `\<class\>` round-trips byte-identical instead of degrading
+ * to `&lt;class&gt;` or `\*foo\*` to `*foo*`. On re-parse the same escape
+ * tokens are produced and rewritten again, keeping the cycle stable — the same
+ * strategy used for raw inline HTML above.
  */
 function rewriteEmptyInlines(inlines: RawToken[]): boolean {
   let changed = false;
@@ -246,22 +246,81 @@ export function normalizeBlankLineGreedyTokens<T extends RawToken[]>(tokens: T):
 }
 
 /**
- * Wrap a marked instance's `lexer` function so every parse pass routes
- * through `normalizeBlankLineGreedyTokens`. Idempotent: re-installing on the
- * same instance is a no-op.
+ * Install blank-line and escape normalizers on a @tiptap/markdown MarkdownManager
+ * (or a raw marked instance as a fallback). Idempotent: re-installing on the
+ * same object is a no-op.
+ *
+ * Two patches are applied:
+ *
+ * 1. **Lexer patch** — routes every parse pass through
+ *    `normalizeBlankLineGreedyTokens`, which splits greedily-absorbed blank
+ *    lines back out as synthetic `space` tokens and rewrites `escape`/`html`
+ *    inline tokens to verbatim `text` tokens.
+ *
+ *    @tiptap/markdown ≥3.26 calls `createLexer().lex(src)` internally (rather
+ *    than the static `marked.lexer(src)`), so we patch `createLexer` on the
+ *    MarkdownManager to wrap the returned Lexer's `.lex` method. For backwards
+ *    compat and for the static `markedInstance.lexer()` calls that still exist
+ *    for nested block parsing, the static `lexer` function is patched too.
+ *
+ * 2. **Serializer patch** (MarkdownManager only) — replaces
+ *    `encodeTextForMarkdown` with an identity function. @tiptap/markdown ≥3.25
+ *    applies `encodeHtmlEntities` and `escapeMarkdownSyntax` inside
+ *    `encodeTextForMarkdown`, which would corrupt our verbatim text nodes: a
+ *    `\<` text node would become `\&lt;` (entity-encoded) and the leading `\`
+ *    would be double-escaped to `\\`. The no-op is safe because our
+ *    escape/html rewrites store the exact markdown source to emit verbatim.
  */
-export function installBlankLineLexerNormalizer(markedInstance: unknown): void {
-  const inst = markedInstance as {
+export function installBlankLineLexerNormalizer(managerOrMarked: unknown): void {
+  type LexerLike = { lex?: (src: string) => RawToken[] };
+  type ManagerLike = {
+    instance?: unknown;
     lexer?: (src: string, options?: unknown) => RawToken[];
+    createLexer?: () => LexerLike;
+    encodeTextForMarkdown?: (text: string, node?: unknown, parentNode?: unknown) => string;
     __mdh_blankLineNormalizerInstalled?: boolean;
   };
-  if (!inst || typeof inst.lexer !== 'function') return;
-  if (inst.__mdh_blankLineNormalizerInstalled) return;
 
-  const original = inst.lexer.bind(inst);
-  inst.lexer = function patchedLexer(src: string, options?: unknown): RawToken[] {
-    const tokens = original(src, options);
-    return normalizeBlankLineGreedyTokens(tokens);
-  };
-  inst.__mdh_blankLineNormalizerInstalled = true;
+  const manager = managerOrMarked as ManagerLike;
+  if (!manager) return;
+  if (manager.__mdh_blankLineNormalizerInstalled) return;
+
+  // Resolve the underlying marked instance (either via .instance getter or directly).
+  const markedInst = (manager.instance !== undefined ? manager.instance : manager) as ManagerLike;
+
+  // --- Lexer patch (primary path in @tiptap/markdown ≥3.26) ---
+  // Patch createLexer so the Lexer instance returned has its .lex() wrapped.
+  if (typeof manager.createLexer === 'function') {
+    const origCreateLexer = manager.createLexer.bind(manager);
+    manager.createLexer = function patchedCreateLexer(): LexerLike {
+      const lexerInst = origCreateLexer() as LexerLike;
+      if (typeof lexerInst.lex === 'function') {
+        const origLex = lexerInst.lex.bind(lexerInst);
+        lexerInst.lex = function patchedLex(src: string): RawToken[] {
+          const tokens = origLex(src);
+          return normalizeBlankLineGreedyTokens(tokens);
+        };
+      }
+      return lexerInst;
+    };
+  }
+
+  // --- Lexer patch (static fallback for nested calls and older versions) ---
+  if (typeof markedInst.lexer === 'function') {
+    const origStaticLexer = markedInst.lexer.bind(markedInst);
+    markedInst.lexer = function patchedStaticLexer(src: string, options?: unknown): RawToken[] {
+      const tokens = origStaticLexer(src, options);
+      return normalizeBlankLineGreedyTokens(tokens);
+    };
+  }
+
+  // --- Serializer patch ---
+  // Disable encodeHtmlEntities + escapeMarkdownSyntax so our verbatim text
+  // nodes (storing raw escape sequences like `\<` and raw HTML like `<kbd>`)
+  // are emitted as-is rather than being corrupted by the escaping passes.
+  if (typeof manager.encodeTextForMarkdown === 'function') {
+    manager.encodeTextForMarkdown = (text: string): string => text;
+  }
+
+  manager.__mdh_blankLineNormalizerInstalled = true;
 }

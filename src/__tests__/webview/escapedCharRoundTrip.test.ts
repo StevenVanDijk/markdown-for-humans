@@ -43,17 +43,11 @@ function createTestEditor(): Editor {
     ],
   });
 
-  // Mirror the production setup in editor.ts: install the normaliser on the
-  // underlying marked instance so escape/html tokens are rewritten on every
-  // parse, exactly the same path real documents go through.
-  const markdownStorage = editor as unknown as {
-    markdown?: { instance?: unknown };
-    storage?: { markdown?: { instance?: unknown } };
-  };
-  const markedInstance =
-    markdownStorage.markdown?.instance ?? markdownStorage.storage?.markdown?.instance;
-  if (markedInstance) {
-    installBlankLineLexerNormalizer(markedInstance);
+  // Mirror the production setup in editor.ts: pass the MarkdownManager so
+  // installBlankLineLexerNormalizer can patch both the lexer and the serializer.
+  const markdownManager = (editor as unknown as { markdown?: unknown }).markdown;
+  if (markdownManager) {
+    installBlankLineLexerNormalizer(markdownManager);
   }
 
   return editor;

@@ -39,14 +39,9 @@ describe('Audit Document Feature', () => {
 
     // Wire up the lexer normaliser exactly the way editor.ts does in production,
     // so these tests exercise the same parse path users see.
-    const markdownStorage = editor as unknown as {
-      markdown?: { instance?: unknown };
-      storage?: { markdown?: { instance?: unknown } };
-    };
-    const markedInstance =
-      markdownStorage.markdown?.instance ?? markdownStorage.storage?.markdown?.instance;
-    if (markedInstance) {
-      installBlankLineLexerNormalizer(markedInstance);
+    const markdownManager = (editor as unknown as { markdown?: unknown }).markdown;
+    if (markdownManager) {
+      installBlankLineLexerNormalizer(markdownManager);
     }
   });
 

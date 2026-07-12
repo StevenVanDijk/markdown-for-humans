@@ -170,6 +170,12 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     return value === 'preserve' ? 'preserve' : 'strip';
   }
 
+  private getTablePipeStyle(): 'padded' | 'compact' {
+    const config = vscode.workspace.getConfiguration();
+    const value = config.get<string>('markdownForHumans.table.pipeStyle', 'padded');
+    return value === 'compact' ? 'compact' : 'padded';
+  }
+
   private getEditorTheme(): EditorThemeSetting {
     const config = vscode.workspace.getConfiguration();
     const value = config.get<string>('markdownForHumans.display.editorTheme', 'vscode');
@@ -528,6 +534,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         e.affectsConfiguration('markdownForHumans.paragraph.spacingBefore') ||
         e.affectsConfiguration('markdownForHumans.paragraph.spacingAfter') ||
         e.affectsConfiguration('markdownForHumans.zoom') ||
+        e.affectsConfiguration('markdownForHumans.table.pipeStyle') ||
         e.affectsConfiguration('markdownForHumans.display.editorTheme')
       ) {
         const config = vscode.workspace.getConfiguration();
@@ -555,6 +562,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         );
         const zoom = config.get<number>('markdownForHumans.zoom', 100);
         const blankLineMode = this.getBlankLineMode();
+        const tablePipeStyle = this.getTablePipeStyle();
         const editorTheme = this.getEditorTheme();
         const vscodeIsDark = this.isVscodeDark();
         if (e.affectsConfiguration('markdownForHumans.blankLines.mode')) {
@@ -582,6 +590,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
           paragraphSpacingAfter: paragraphSpacingAfter,
           zoom: zoom,
           blankLineMode,
+          tablePipeStyle,
           editorTheme,
           vscodeIsDark,
         });
@@ -695,6 +704,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     const paragraphSpacingAfter = config.get<number>('markdownForHumans.paragraph.spacingAfter', 0);
     const zoom = config.get<number>('markdownForHumans.zoom', 100);
     const blankLineMode = this.getBlankLineMode();
+    const tablePipeStyle = this.getTablePipeStyle();
     const editorTheme = this.getEditorTheme();
 
     webview.postMessage({
@@ -709,6 +719,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       paragraphSpacingAfter: paragraphSpacingAfter,
       zoom: zoom,
       blankLineMode,
+      tablePipeStyle,
       editorTheme,
       vscodeIsDark: this.isVscodeDark(),
     });
@@ -787,6 +798,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         );
         const zoom = config.get<number>('markdownForHumans.zoom', 100);
         const blankLineMode = this.getBlankLineMode();
+        const tablePipeStyle = this.getTablePipeStyle();
         const editorTheme = this.getEditorTheme();
         webview.postMessage({
           type: 'settingsUpdate',
@@ -799,6 +811,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
           paragraphSpacingAfter: paragraphSpacingAfter,
           zoom: zoom,
           blankLineMode,
+          tablePipeStyle,
           editorTheme,
           vscodeIsDark: this.isVscodeDark(),
         });

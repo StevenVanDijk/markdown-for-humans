@@ -27,7 +27,7 @@ import { MarkdownParagraph } from './extensions/markdownParagraph';
 import { BlankLinePreservation } from './extensions/blankLinePreservation';
 import { OrderedListMarkdownFix } from './extensions/orderedListMarkdownFix';
 import { BulletListMarkdownFix } from './extensions/bulletListMarkdownFix';
-import { HtmlPreservingTable } from './extensions/htmlPreservingTable';
+import { HtmlPreservingTable, tableRenderOptions } from './extensions/htmlPreservingTable';
 import { RawHtmlBlock } from './extensions/rawHtmlBlock';
 import { DraggableBlocks } from './extensions/draggableBlocks';
 import { DocumentAuditExtension } from './features/auditDocument';
@@ -672,13 +672,14 @@ function initializeEditor(initialContent: string) {
     // works for paragraph-followed-by-blank-lines cases.
     try {
       const markdownStorage = editorInstance as unknown as {
-        markdown?: { instance?: unknown };
-        storage?: { markdown?: { instance?: unknown } };
+        markdown?: unknown;
+        storage?: { markdown?: unknown };
       };
-      const markedInstance =
-        markdownStorage.markdown?.instance ?? markdownStorage.storage?.markdown?.instance;
-      if (markedInstance) {
-        installBlankLineLexerNormalizer(markedInstance);
+      // Pass the MarkdownManager (editor.markdown) so installBlankLineLexerNormalizer
+      // can patch both the lexer AND the serializer's encodeTextForMarkdown.
+      const markdownManager = markdownStorage.markdown ?? markdownStorage.storage?.markdown;
+      if (markdownManager) {
+        installBlankLineLexerNormalizer(markdownManager);
       }
     } catch (error) {
       console.warn('[MD4H] Failed to install blank-line lexer normalizer:', error);
@@ -1025,6 +1026,9 @@ window.addEventListener('message', (event: MessageEvent) => {
         if (message.blankLineMode === 'preserve' || message.blankLineMode === 'strip') {
           blankLineMode = message.blankLineMode;
         }
+        if (message.tablePipeStyle === 'compact' || message.tablePipeStyle === 'padded') {
+          tableRenderOptions.pipeStyle = message.tablePipeStyle;
+        }
         // Store imagePath setting if present
         if (typeof message.imagePath === 'string') {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1057,6 +1061,9 @@ window.addEventListener('message', (event: MessageEvent) => {
         }
         if (message.blankLineMode === 'preserve' || message.blankLineMode === 'strip') {
           blankLineMode = message.blankLineMode;
+        }
+        if (message.tablePipeStyle === 'compact' || message.tablePipeStyle === 'padded') {
+          tableRenderOptions.pipeStyle = message.tablePipeStyle;
         }
         // Update imagePath setting
         if (typeof message.imagePath === 'string') {
